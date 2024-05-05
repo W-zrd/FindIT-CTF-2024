@@ -1,3 +1,5 @@
+![Find IT CTF 2024](images/main.png "image_tooltip")
+
 # Contributors
 
 | #   | Name                  | GitHub                                        |
@@ -29,12 +31,12 @@
 - [**Is This Python (712 pts)**](#is-this-python-712-pts)
 - [**Woilah Cik (894 pts)**](#woilah-cik-894-pts)
 
-**Miscellaneous (TODO)**
+**Miscellaneous**
 
 - [**Your Journey (901 pts)**](#your-journey-901-pts)
 - [**Neobim Enjoyer (982 pts)**](#neobim-enjoyer-982-pts)
 
-**Binary Exploitation (TODO)**
+**Binary Exploitation**
 
 - [**Elevator (907 pts)**](#elevator-907-pts)
 - [**Everything Machine 2.0 (931 pts)**](#everything-machine-20-931-pts)
